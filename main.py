@@ -101,7 +101,12 @@ def run_st():
         for lib in libs:
             if lib not in default_libs:
                 subprocess.run(["arduino-cli.exe", "lib", "install", lib.replace(".h", "")], capture_output=True)
-
+    def get_cached_board():
+        if "hw_board" not in st.session_state:
+            board, port = detect_board()
+            st.session_state.hw_board = board
+            st.session_state.hw_port = port
+        return st.session_state.hw_board, st.session_state.hw_port
     def generate_ai_code(task, board):
         prompt = f"you are a best Arduino and esp32 professor Generate Arduino code for: {task}. based on Board: {board}. Return ONLY code inside [code] and [/code] tags."
         raw = call_ollama(prompt)
@@ -191,7 +196,7 @@ def run_st():
         st.session_state['left_project'] = projects_left
         if project_count >= 5:
             st.session_state.trial_active = False
-        board, port = detect_board()
+        board, port = get_cached_board()
         board_status = f"🟢 {board} Connected" if board else "🔴 No Board"
 
         # HEADER
@@ -466,3 +471,4 @@ if __name__ == "__main__":
     # 2. Ab Streamlit ka main function normal call karein
     # Isse context errors nahi aayenge
     run_st()
+
