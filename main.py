@@ -15,7 +15,8 @@ import datetime
 import urllib.request
 import zipfile
 import base64
-
+from agent import run
+run()
 # -----------------------------------------------------------------------
 # 1. OLLAMA CORE ENGINE
 if 'left_project' not in st.session_state:
@@ -105,15 +106,14 @@ def generate_ai_code(task, board):
     raw = call_ollama(prompt)
     match = re.search(r"\[code\](.*?)\[/code\]", raw, re.DOTALL)
     return match.group(1).strip() if match else raw
-
+AGENT_URL = "http://localhost:5555"
 def detect_board():
-    ports = serial.tools.list_ports.comports()
-    for p in ports:
-        desc = p.description.lower()
-        if "cp210" in desc: return "ESP32", p.device
-        if "ch340" in desc or "nano" in desc: return "Arduino Nano", p.device
-        if "arduino" in desc or "uno" in desc: return "Arduino Uno", p.device
-    return None, None
+    try:
+        r = requests.get(f"{AGENT_URL}/detect", timeout=2)
+        data = r.json()
+        return data["board"], data["port"]
+    except:
+        return None, None
 
 def upload_code(code, board, port):
     folder = "sketch_build"
