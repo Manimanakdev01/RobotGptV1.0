@@ -102,11 +102,19 @@ def run_st():
             if lib not in default_libs:
                 subprocess.run(["arduino-cli.exe", "lib", "install", lib.replace(".h", "")], capture_output=True)
     def get_cached_board():
-        if "hw_board" not in st.session_state:
+            board = st.session_state.get("hw_board")
+            port = st.session_state.get("hw_port")
+        
+            if board and port:
+                return board, port
+        
             board, port = detect_board()
-            st.session_state.hw_board = board
-            st.session_state.hw_port = port
-        return st.session_state.hw_board, st.session_state.hw_port
+        
+            if board and port:   # 🔥 ONLY cache VALID data
+                st.session_state.hw_board = board
+                st.session_state.hw_port = port
+        
+            return board, port
     def generate_ai_code(task, board):
         prompt = f"you are a best Arduino and esp32 professor Generate Arduino code for: {task}. based on Board: {board}. Return ONLY code inside [code] and [/code] tags."
         raw = call_ollama(prompt)
@@ -348,7 +356,7 @@ def run_st():
                 st.header("🚀 System Deployment")
             
                 # 1. Hardware Detection
-                board, port = detect_board()
+                board, port = get_cached_board()
                 
                 # 2. UI Layout for Deployment
                 col1, col2 = st.columns([1, 1])
@@ -359,7 +367,9 @@ def run_st():
                         st.info(f"🔌 Port: {port}")
                     else:
                         st.error("❌ No Hardware Detected")
-                        if st.button("🔄 Rescan Ports"):
+                        if st.button("🔄 Rescan Hardware"):
+                            st.session_state.pop("hw_board", None)
+                            st.session_state.pop("hw_port", None)
                             st.rerun()
                     st.markdown('</div>', unsafe_allow_html=True)
 
@@ -464,11 +474,11 @@ if __name__ == "__main__":
     agent_thread = td.Thread(target=run_f, daemon=True)
     
     if 'agent_started' not in st.session_state:
-        agent_thread.start()
-        st.session_state['agent_started'] = True
-        print("🚀 Flask Agent started in background...")
-
+            agent_thread.start()
+            st.session_state['agent_started'] = True
+            time.sleep(1.5)   # 🔥 agent warm-up
     # 2. Ab Streamlit ka main function normal call karein
     # Isse context errors nahi aayenge
     run_st()
+
 
