@@ -22,4 +22,5 @@ ollama
 
 flask
 
-socket
+sockets
+
