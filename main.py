@@ -109,26 +109,27 @@ def run_st():
         return match.group(1).strip() if match else raw
 
     def detect_board():
-        ports = serial.tools.list_ports.comports()
-        for p in ports:
-            desc = p.description.lower()
-            if "cp210" in desc: return "ESP32", p.device
-            if "ch340" in desc or "nano" in desc: return "Arduino Nano", p.device
-            if "arduino" in desc or "uno" in desc: return "Arduino Uno", p.device
-        return None, None
+        try:
+            r = requests.get("http://127.0.0.1:5050/detect-board", timeout=3)
+            data = r.json()
+            return data["board"], data["port"]
+        except:
+            return None, None
 
-    def upload_code(code, board, port):
-        folder = "sketch_build"
-        os.makedirs(folder, exist_ok=True)
-        path = os.path.join(folder, "sketch_build.ino")
-        with open(path, "w") as f: f.write(code)
-        
-        fqbn_map = {"Arduino Uno": "arduino:avr:uno", "Arduino Nano": "arduino:avr:nano:cpu=atmega328old", "ESP32": "esp32:esp32:esp32"}
-        fqbn = fqbn_map.get(board, "arduino:avr:uno")
-
-        subprocess.run(["arduino-cli.exe", "compile", "--fqbn", fqbn, folder], capture_output=True)
-        res = subprocess.run(["arduino-cli.exe", "upload", "-p", port, "--fqbn", fqbn, folder], capture_output=True, text=True)
-        return "✅ Firmware Uploaded!" if res.returncode == 0 else res.stderr
+    def upload_code_via_agent(code, board, port):
+        try:
+            r = requests.post(
+                "http://127.0.0.1:5050/upload",
+                json={
+                    "code": code,
+                    "board": board,
+                    "port": port
+                },
+                timeout=300
+            )
+            return r.json()
+        except Exception as e:
+         return {"status": "error", "log": str(e)}
 
     def save_project(email, project):
         db.child("projects").child(email.replace(".", "_")).push(project)
@@ -366,47 +367,62 @@ def run_st():
                     st.markdown('</div>', unsafe_allow_html=True)
 
                 # 3. Execution Logic
+                # 3. Execution Logic
                 if board and code_exists:
                     if st.button("⚡ INITIATE SYSTEM FLASH", use_container_width=True):
-                        # Check trial status before flashing
+
                         if not st.session_state.get('trial_active', True):
                             st.error("Trial limit reached. Please upgrade to Pro to flash hardware.")
                         else:
                             try:
                                 with st.status("Initializing Deployment...", expanded=True) as status:
+
                                     # Step A: Library Sync
-                                    status.write("Checking for required libraries...")
+                                    status.write("📦 Checking for required libraries...")
                                     auto_install_libraries(st.session_state['ai_code'])
-                                    
-                                    # Step B: Upload
-                                    status.write(f"Compiling for {board}...")
-                                    res = upload_code(st.session_state['ai_code'], board, port)
-                                    
-                                    if "✅" in res:
-                                        status.update(label="🚀 Deployment Successful!", state="complete")
+
+                                    # Step B: Upload via Flask Agent
+                                    status.write(f"⚙️ Compiling & Uploading for {board}...")
+                                    res = upload_code_via_agent(
+                                        st.session_state['ai_code'],
+                                        board,
+                                        port
+                                    )
+
+                                    if res.get("status") == "success":
+                                        status.update(
+                                            label="🚀 Deployment Successful!",
+                                            state="complete"
+                                        )
+                                        st.success("🚀 Firmware Uploaded Successfully!")
                                         st.balloons()
-                                        
+
                                         # Step C: Database Logging
                                         save_project(
-                                            st.session_state['user']['email'], 
+                                            st.session_state['user']['email'],
                                             {
-                                                "task": st.session_state['task'], 
-                                                "code": st.session_state['ai_code'], 
-                                                "board": board, 
+                                                "task": st.session_state.get('task'),
+                                                "code": st.session_state.get('ai_code'),
+                                                "board": board,
                                                 "time_stamp": time.time(),
                                                 "status": "Deployed",
-                                                "left_project":st.session_state['left_project']
+                                                "left_project": st.session_state.get('left_project')
                                             }
                                         )
+
                                     else:
-                                        status.update(label="❌ Deployment Failed", state="error")
-                                        st.error("Compiler Error Log:")
-                                        st.code(res) # Shows the actual error from arduino-cli
+                                        status.update(
+                                            label="❌ Deployment Failed",
+                                            state="error"
+                                        )
+                                        st.error("Compiler / Upload Error:")
+                                        st.code(res.get("log", "Unknown error"))
+
                             except Exception as e:
                                 st.error(f"System Error: {str(e)}")
-                
+
                 elif not code_exists:
-                    st.warning("⚠️ No firmware found. Please go to 'Firmware Lab' to generate code first.")
+                    st.warning("⚠️ No firmware found. Please generate code first.")
         else:
             st.error("🚫 Your free trial has ended")
 
