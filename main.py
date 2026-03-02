@@ -944,12 +944,17 @@ def run_st():
                 st.switch_page("🛒 Purchase Kits")   
 # ... (Baki saara import aur functions wahi rahenge)
 
-def run_f():
-    """Background Flask Agent chalane ke liye"""
-    try:
-        run() # Ye agent.py wala Flask server hai
-    except Exception as e:
-        print(f"Agent Error: {e}")
+def find_free_port(start=5050, end=5100):
+    for port in range(start, end):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            if s.connect_ex(("127.0.0.1", port)) != 0:
+                return port
+    raise RuntimeError("No free port found")
+
+def run():
+    port = find_free_port()
+    print(f"🚀 Flask Agent running on port {port}")
+    app.run(port=port, debug=False, threaded=True)
 
 # --- MAIN EXECUTION LOGIC ---
 if __name__ == "__main__":
@@ -964,6 +969,7 @@ if __name__ == "__main__":
     # 2. Ab Streamlit ka main function normal call karein
     # Isse context errors nahi aayenge
     run_st()
+
 
 
 
