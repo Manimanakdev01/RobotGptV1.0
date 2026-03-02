@@ -47,4 +47,5 @@ def flash():
 
     return jsonify({"status": "success"})
 def run():
-    app.run(port=5555)
+
+    app.run(port=5000)
