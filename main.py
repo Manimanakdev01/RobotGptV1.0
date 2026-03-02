@@ -15,8 +15,7 @@ import datetime
 import urllib.request
 import zipfile
 import base64
-from agent import run
-run()
+
 # -----------------------------------------------------------------------
 # 1. OLLAMA CORE ENGINE
 if 'left_project' not in st.session_state:
@@ -425,3 +424,4 @@ else:
 
         if st.button("🔓 Upgrade Now"):
             st.switch_page("🛒 Purchase Kits")   
+
