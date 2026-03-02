@@ -46,6 +46,6 @@ def flash():
     subprocess.run(upload_cmd, check=True)
 
     return jsonify({"status": "success"})
-def run():
 
-    app.run(port=5000)
+app.run(port=5000)
+
