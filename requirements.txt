@@ -19,3 +19,4 @@ numpy
 opencv-python
 
 ollama
+
