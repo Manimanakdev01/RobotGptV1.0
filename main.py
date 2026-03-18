@@ -34,7 +34,7 @@ import datetime
 import urllib.request
 import zipfile
 import base64
-from agent import run
+from agent import run_f
 import threading as td
 # -----------------------------------------------------------------------
 # 1. OLLAMA CORE ENGINE
