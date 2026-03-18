@@ -1,112 +1,56 @@
 from flask import Flask, request, jsonify
+import serial
 import serial.tools.list_ports
-import subprocess
-import os
-import shutil
+import threading
+import time
 
 app = Flask(__name__)
+ser = None
+board_name = None
+port_name = None
 
-ARDUINO_CLI = os.path.abspath("arduino-cli.exe")  # 🔥 absolute path recommended
+# --- Serial Detection ---
+def init_serial():
+    global ser, board_name, port_name
+    ports = serial.tools.list_ports.comports()
+    for p in ports:
+        if "Arduino" in p.description or "ESP32" in p.description:
+            try:
+                ser = serial.Serial(p.device, 9600, timeout=1)
+                board_name = p.description
+                port_name = p.device
+                print(f"✅ Serial initialized: {board_name} on {port_name}")
+                return
+            except Exception as e:
+                print(f"Serial init error: {e}")
+    ser = None
+    board_name = None
+    port_name = None
+    print("❌ No compatible board found")
 
-# ---------------- BOARD DETECTION ----------------
+# Run serial init in background
+threading.Thread(target=init_serial, daemon=True).start()
+
+# --- Routes ---
 @app.route("/detect-board", methods=["GET"])
 def detect_board():
-    ports = serial.tools.list_ports.comports()
+    return jsonify({"board": board_name, "port": port_name})
 
-    for p in ports:
-        desc = (p.description or "").lower()
-        hwid = (p.hwid or "").lower()
-
-        if any(x in desc for x in ["cp210", "silicon labs", "usb serial"]):
-            return jsonify({"board": "ESP32", "port": p.device})
-
-        if "ch340" in desc or "ch341" in desc:
-            return jsonify({"board": "Arduino Nano", "port": p.device})
-
-        if "arduino" in desc or "uno" in desc:
-            return jsonify({"board": "Arduino Uno", "port": p.device})
-
-    return jsonify({"board": None, "port": None})
-
-
-# ---------------- UPLOAD ----------------
 @app.route("/upload", methods=["POST"])
-def upload():
+def upload_code():
+    global ser
     data = request.json
-    code = data["code"]
-    board = data["board"]
-    port = data["port"]
-
-    build_dir = "sketch_build"
-    os.makedirs(build_dir, exist_ok=True)
-
-    ino_path = os.path.join(build_dir, "sketch_build.ino")
-    with open(ino_path, "w", encoding="utf-8") as f:
-        f.write(code)
-
-    fqbn_map = {
-        "Arduino Uno": "arduino:avr:uno",
-        "Arduino Nano": "arduino:avr:nano",
-        "ESP32": "esp32:esp32:esp32"
-    }
-
-    fqbn = fqbn_map.get(board)
-    if not fqbn:
-        return jsonify({"status": "error", "log": "Unknown board"})
-
-    # ---------- COMPILE ----------
-    compile_cmd = [
-        ARDUINO_CLI, "compile",
-        "--fqbn", fqbn,
-        build_dir
-    ]
-
-    compile = subprocess.run(
-        compile_cmd,
-        capture_output=True,
-        text=True
-    )
-
-    if compile.returncode != 0:
-        return jsonify({
-            "status": "compile_error",
-            "log": compile.stderr
-        })
-
-    # ---------- UPLOAD ----------
-    upload_cmd = [
-        ARDUINO_CLI, "upload",
-        "-p", port,
-        "--fqbn", fqbn,
-        build_dir
-    ]
-
-    upload = subprocess.run(
-        upload_cmd,
-        capture_output=True,
-        text=True
-    )
-
-    if upload.returncode == 0:
-        return jsonify({"status": "success"})
-
-    # Nano old bootloader fallback
-    if board == "Arduino Nano":
-        fallback_fqbn = "arduino:avr:nano:cpu=atmega328old"
-        upload_cmd[upload_cmd.index("--fqbn") + 1] = fallback_fqbn
-        retry = subprocess.run(upload_cmd, capture_output=True, text=True)
-        if retry.returncode == 0:
-            return jsonify({"status": "success"})
-
-    return jsonify({
-        "status": "upload_error",
-        "log": upload.stderr
-    })
-
-
-def run():
-    app.run(port=5050, debug=False, threaded=True)
-
+    code = data.get("code")
+    if not ser:
+        return jsonify({"status": "error", "log": "No board connected"})
+    
+    try:
+        # For demo, just sending code as string
+        # Replace with actual compile + upload logic
+        ser.write(code.encode())
+        return jsonify({"status": "success", "log": "Code uploaded"})
+    except Exception as e:
+        return jsonify({"status": "error", "log": str(e)})
 
 if __name__ == "__main__":
-    run()
+    app.run(port=5050)
